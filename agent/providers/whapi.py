@@ -18,6 +18,7 @@ class ProveedorWhapi(ProveedorWhatsApp):
 
     async def parsear_webhook(self, request: Request) -> list[MensajeEntrante]:
         body = await request.json()
+        logger.info(f"Webhook payload: {body}")
         mensajes = []
         for msg in body.get("messages", []):
             tipo = msg.get("type", "")
