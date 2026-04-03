@@ -38,7 +38,7 @@ class ProveedorWhapi(ProveedorWhatsApp):
                 audio = msg.get("voice") or msg.get("audio") or {}
                 media_id = audio.get("id", "")
                 if media_id:
-                    audio_url = f"{self.url_base}/whatsapp/media/{media_id}"
+                    audio_url = f"{self.url_base}/media/{media_id}"
                 else:
                     audio_url = audio.get("link", "")
                 mensajes.append(MensajeEntrante(
