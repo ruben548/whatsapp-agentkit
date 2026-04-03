@@ -7,6 +7,7 @@ import logging
 import tempfile
 import httpx
 import edge_tts
+import emoji
 from groq import AsyncGroq
 
 logger = logging.getLogger("agentkit")
@@ -46,24 +47,9 @@ async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
         return ""
 
 
-_EMOJI_PATTERN = re.compile(
-    "["
-    "\U0001F600-\U0001F64F"
-    "\U0001F300-\U0001F5FF"
-    "\U0001F680-\U0001F6FF"
-    "\U0001F1E0-\U0001F1FF"
-    "\U00002500-\U00002BFF"
-    "\U00002702-\U000027B0"
-    "\U0001F900-\U0001F9FF"
-    "\U0001FA00-\U0001FAFF"
-    "]+",
-    flags=re.UNICODE,
-)
-
-
 def _limpiar_para_audio(texto: str) -> str:
     """Elimina emojis y limpia espacios extra antes de sintetizar voz."""
-    texto = _EMOJI_PATTERN.sub("", texto)
+    texto = emoji.replace_emoji(texto, replace="")
     return re.sub(r" {2,}", " ", texto).strip()
 
 
