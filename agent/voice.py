@@ -63,9 +63,9 @@ async def _elevenlabs_tts(texto: str) -> bytes:
         "text": texto,
         "model_id": "eleven_multilingual_v2",
         "voice_settings": {
-            "stability": 0.4,
-            "similarity_boost": 0.85,
-            "style": 0.2,
+            "stability": 0.25,
+            "similarity_boost": 0.90,
+            "style": 0.40,
             "use_speaker_boost": True,
         },
     }
