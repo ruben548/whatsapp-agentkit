@@ -34,6 +34,9 @@ class ProveedorWhapi(ProveedorWhatsApp):
                     es_propio=es_propio,
                 ))
             elif tipo in ("audio", "voice"):
+                # Ignorar audios propios (los que envía el agente)
+                if es_propio:
+                    continue
                 # Mensaje de voz — construir URL de descarga con el ID de media
                 audio = msg.get("voice") or msg.get("audio") or {}
                 media_id = audio.get("id", "")
@@ -45,7 +48,7 @@ class ProveedorWhapi(ProveedorWhatsApp):
                     telefono=telefono,
                     texto="",
                     mensaje_id=mensaje_id,
-                    es_propio=es_propio,
+                    es_propio=False,
                     audio_url=audio_url,
                 ))
 
