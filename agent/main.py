@@ -100,3 +100,38 @@ async def webhook_handler(request: Request):
     except Exception as e:
         logger.error(f"Error en webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/instagram")
+async def instagram_handler(request: Request):
+    """
+    Endpoint para ManyChat — recibe mensajes de Instagram DMs y devuelve la respuesta de Claude.
+    ManyChat envía el mensaje y usa la respuesta para contestar al usuario en Instagram.
+    """
+    try:
+        body = await request.json()
+
+        # ManyChat envía estos campos en el HTTP Request block
+        user_id = body.get("subscriber_id", body.get("user_id", "desconocido"))
+        mensaje = body.get("message", body.get("text", "")).strip()
+        nombre = body.get("first_name", "")
+
+        if not mensaje:
+            return {"response": "Disculpa, no entendí tu mensaje. ¿Puedes contarme más?"}
+
+        # Usamos prefijo "ig_" para separar la memoria de Instagram de la de WhatsApp
+        clave = f"ig_{user_id}"
+        logger.info(f"Instagram DM de {nombre} ({user_id}): {mensaje}")
+
+        historial = await obtener_historial(clave)
+        respuesta = await generar_respuesta(mensaje, historial)
+
+        await guardar_mensaje(clave, "user", mensaje)
+        await guardar_mensaje(clave, "assistant", respuesta)
+
+        logger.info(f"Respuesta Instagram a {user_id}: {respuesta}")
+        return {"response": respuesta}
+
+    except Exception as e:
+        logger.error(f"Error en Instagram handler: {e}")
+        return {"response": "Estoy teniendo un pequeño problema técnico. Vuelvo en un momento."}
