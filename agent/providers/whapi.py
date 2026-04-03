@@ -1,7 +1,7 @@
 # agent/providers/whapi.py — Adaptador para Whapi.cloud
-# Generado por AgentKit
 
 import os
+import base64
 import logging
 import httpx
 from fastapi import Request
@@ -14,23 +14,41 @@ class ProveedorWhapi(ProveedorWhatsApp):
 
     def __init__(self):
         self.token = os.getenv("WHAPI_TOKEN")
-        self.url_envio = "https://gate.whapi.cloud/messages/text"
+        self.url_base = "https://gate.whapi.cloud"
 
     async def parsear_webhook(self, request: Request) -> list[MensajeEntrante]:
         body = await request.json()
         mensajes = []
         for msg in body.get("messages", []):
-            mensajes.append(MensajeEntrante(
-                telefono=msg.get("chat_id", ""),
-                texto=msg.get("text", {}).get("body", ""),
-                mensaje_id=msg.get("id", ""),
-                es_propio=msg.get("from_me", False),
-            ))
+            tipo = msg.get("type", "")
+            es_propio = msg.get("from_me", False)
+            telefono = msg.get("chat_id", "")
+            mensaje_id = msg.get("id", "")
+
+            if tipo == "text":
+                mensajes.append(MensajeEntrante(
+                    telefono=telefono,
+                    texto=msg.get("text", {}).get("body", ""),
+                    mensaje_id=mensaje_id,
+                    es_propio=es_propio,
+                ))
+            elif tipo in ("audio", "voice"):
+                # Mensaje de voz — extraer URL para transcribir después
+                audio = msg.get("audio") or msg.get("voice") or {}
+                audio_url = audio.get("link", "")
+                mensajes.append(MensajeEntrante(
+                    telefono=telefono,
+                    texto="",
+                    mensaje_id=mensaje_id,
+                    es_propio=es_propio,
+                    audio_url=audio_url,
+                ))
+
         return mensajes
 
     async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
         if not self.token:
-            logger.warning("WHAPI_TOKEN no configurado — mensaje no enviado")
+            logger.warning("WHAPI_TOKEN no configurado")
             return False
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -38,10 +56,29 @@ class ProveedorWhapi(ProveedorWhatsApp):
         }
         async with httpx.AsyncClient() as client:
             r = await client.post(
-                self.url_envio,
+                f"{self.url_base}/messages/text",
                 json={"to": telefono, "body": mensaje},
                 headers=headers,
             )
             if r.status_code != 200:
-                logger.error(f"Error Whapi: {r.status_code} — {r.text}")
+                logger.error(f"Error Whapi texto: {r.status_code} — {r.text}")
+            return r.status_code == 200
+
+    async def enviar_audio(self, telefono: str, audio_bytes: bytes) -> bool:
+        if not self.token:
+            logger.warning("WHAPI_TOKEN no configurado")
+            return False
+        audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{self.url_base}/messages/voice",
+                json={"to": telefono, "media": f"data:audio/mpeg;base64,{audio_b64}"},
+                headers=headers,
+            )
+            if r.status_code != 200:
+                logger.error(f"Error Whapi audio: {r.status_code} — {r.text}")
             return r.status_code == 200

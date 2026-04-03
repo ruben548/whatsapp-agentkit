@@ -1,5 +1,4 @@
 # agent/main.py — Servidor FastAPI + Webhook de WhatsApp
-# Generado por AgentKit
 
 import os
 import logging
@@ -11,6 +10,7 @@ from dotenv import load_dotenv
 from agent.brain import generar_respuesta
 from agent.memory import inicializar_db, guardar_mensaje, obtener_historial
 from agent.providers import obtener_proveedor
+from agent.voice import transcribir_audio, texto_a_audio
 
 load_dotenv()
 
@@ -58,19 +58,42 @@ async def webhook_handler(request: Request):
         mensajes = await proveedor.parsear_webhook(request)
 
         for msg in mensajes:
-            if msg.es_propio or not msg.texto:
+            if msg.es_propio:
                 continue
 
-            logger.info(f"Mensaje de {msg.telefono}: {msg.texto}")
+            es_audio = bool(msg.audio_url)
+
+            if es_audio:
+                # Mensaje de voz — transcribir primero
+                whapi_token = os.getenv("WHAPI_TOKEN", "")
+                texto_usuario = await transcribir_audio(msg.audio_url, whapi_token)
+                if not texto_usuario:
+                    logger.warning(f"No se pudo transcribir audio de {msg.telefono}")
+                    continue
+                logger.info(f"Audio de {msg.telefono} transcrito: {texto_usuario}")
+            elif msg.texto:
+                texto_usuario = msg.texto
+            else:
+                continue
 
             historial = await obtener_historial(msg.telefono)
-            respuesta = await generar_respuesta(msg.texto, historial)
+            respuesta = await generar_respuesta(texto_usuario, historial)
 
-            await guardar_mensaje(msg.telefono, "user", msg.texto)
+            await guardar_mensaje(msg.telefono, "user", texto_usuario)
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
 
-            await proveedor.enviar_mensaje(msg.telefono, respuesta)
-            logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
+            if es_audio:
+                # Responder con voz
+                audio_bytes = await texto_a_audio(respuesta)
+                if audio_bytes:
+                    await proveedor.enviar_audio(msg.telefono, audio_bytes)
+                else:
+                    # Fallback a texto si falla el TTS
+                    await proveedor.enviar_mensaje(msg.telefono, respuesta)
+            else:
+                await proveedor.enviar_mensaje(msg.telefono, respuesta)
+
+            logger.info(f"Respuesta a {msg.telefono} ({'audio' if es_audio else 'texto'}): {respuesta}")
 
         return {"status": "ok"}
 
