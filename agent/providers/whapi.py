@@ -34,9 +34,13 @@ class ProveedorWhapi(ProveedorWhatsApp):
                     es_propio=es_propio,
                 ))
             elif tipo in ("audio", "voice"):
-                # Mensaje de voz — extraer URL para transcribir después
-                audio = msg.get("audio") or msg.get("voice") or {}
-                audio_url = audio.get("link", "")
+                # Mensaje de voz — construir URL de descarga con el ID de media
+                audio = msg.get("voice") or msg.get("audio") or {}
+                media_id = audio.get("id", "")
+                if media_id:
+                    audio_url = f"{self.url_base}/whatsapp/media/{media_id}"
+                else:
+                    audio_url = audio.get("link", "")
                 mensajes.append(MensajeEntrante(
                     telefono=telefono,
                     texto="",
