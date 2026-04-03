@@ -2,6 +2,7 @@
 # Groq Whisper (gratis) para escuchar, edge-tts (gratis) para hablar
 
 import os
+import re
 import logging
 import tempfile
 import httpx
@@ -45,13 +46,34 @@ async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
         return ""
 
 
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"
+    "\U0001F300-\U0001F5FF"
+    "\U0001F680-\U0001F6FF"
+    "\U0001F1E0-\U0001F1FF"
+    "\U00002500-\U00002BFF"
+    "\U00002702-\U000027B0"
+    "\U0001F900-\U0001F9FF"
+    "\U0001FA00-\U0001FAFF"
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def _limpiar_para_audio(texto: str) -> str:
+    """Elimina emojis y limpia espacios extra antes de sintetizar voz."""
+    texto = _EMOJI_PATTERN.sub("", texto)
+    return re.sub(r" {2,}", " ", texto).strip()
+
+
 async def texto_a_audio(texto: str) -> bytes:
     """
     Convierte texto a audio MP3 usando edge-tts (Microsoft, completamente gratis).
     Retorna los bytes del audio en formato MP3.
     """
     try:
-        comunicador = edge_tts.Communicate(texto, VOZ_ESPAÑOL)
+        comunicador = edge_tts.Communicate(_limpiar_para_audio(texto), VOZ_ESPAÑOL)
 
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             ruta_temp = f.name
