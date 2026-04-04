@@ -28,7 +28,10 @@ def _descargar_audio_sync(url: str, token: str = "") -> bytes:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=60) as resp:
-        return resp.read()
+        content_length = resp.headers.get("Content-Length", "unknown")
+        data = resp.read()
+        logger.info(f"HTTP headers: Content-Length={content_length}, leídos={len(data)} bytes, url_final={resp.url[:80]}")
+        return data
 
 
 async def transcribir_audio(url_audio: str, token_whapi: str, _mensaje_id: str = "") -> str:
