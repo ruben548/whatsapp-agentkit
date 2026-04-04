@@ -22,38 +22,20 @@ groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
-    headers = {"Authorization": f"Bearer {token_whapi}"}
+    # Whapi requiere el token como query param para descargar media
+    url_con_token = f"{url_audio}?token={token_whapi}"
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        r = await client.get(url_audio, headers=headers)
+        r = await client.get(url_con_token)
         if r.status_code != 200:
-            logger.error(f"Error descargando audio: {r.status_code}")
+            logger.error(f"Error descargando audio: {r.status_code} — {r.text[:200]}")
             return ""
 
-        # Whapi puede responder con JSON {"url": "..."} en vez del binario directo
-        content_type = r.headers.get("content-type", "")
-        if "application/json" in content_type or r.content[:1] == b"{":
-            try:
-                data = r.json()
-                media_url = data.get("url") or data.get("link") or data.get("media")
-                if not media_url:
-                    logger.error(f"Whapi no devolvió URL de audio en JSON: {data}")
-                    return ""
-                r2 = await client.get(media_url, headers=headers)
-                if r2.status_code != 200:
-                    logger.error(f"Error descargando audio desde URL directa: {r2.status_code}")
-                    return ""
-                audio_bytes = r2.content
-            except Exception as e:
-                logger.error(f"Error parseando respuesta JSON de Whapi: {e}")
-                return ""
-        else:
-            audio_bytes = r.content
-
+        audio_bytes = r.content
         if not audio_bytes:
             logger.error("Audio descargado está vacío")
             return ""
 
-        logger.info(f"Audio descargado: {len(audio_bytes)} bytes")
+        logger.info(f"Audio descargado: {len(audio_bytes)} bytes, content-type: {r.headers.get('content-type', 'unknown')}")
 
     try:
         transcripcion = await groq_client.audio.transcriptions.create(
