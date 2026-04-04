@@ -104,18 +104,21 @@ def _limpiar_para_audio(texto: str) -> str:
 
 async def _elevenlabs_tts(texto: str) -> bytes:
     """Sintetiza voz con ElevenLabs (voz clonada, máxima calidad)."""
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+    # Añadir pausa inicial para evitar que el primer fonema se corte
+    texto_con_pausa = ", " + texto
+    # output_format mp3_44100_128 es el más compatible con WhatsApp
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}?output_format=mp3_44100_128"
     headers = {
         "xi-api-key": ELEVENLABS_API_KEY,
         "Content-Type": "application/json",
     }
     payload = {
-        "text": texto,
+        "text": texto_con_pausa,
         "model_id": "eleven_multilingual_v2",
         "voice_settings": {
-            "stability": 0.25,
+            "stability": 0.55,      # más estable al arrancar (era 0.25)
             "similarity_boost": 0.90,
-            "style": 0.40,
+            "style": 0.0,           # sin estilo extra que cause artefactos (era 0.40)
             "use_speaker_boost": True,
         },
     }
