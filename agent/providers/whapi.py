@@ -40,12 +40,12 @@ class ProveedorWhapi(ProveedorWhatsApp):
                 # Mensaje de voz — obtener URL de descarga
                 audio = msg.get("voice") or msg.get("audio") or {}
                 logger.info(f"Objeto audio completo: {audio}")
-                # Siempre usar endpoint de Whapi con auth (S3 link llega vacío)
-                media_id = audio.get("id", "")
-                if media_id:
-                    audio_url = f"{self.url_base}/media/{media_id}"
-                else:
-                    audio_url = audio.get("link", "")
+                # Preferir el link directo de S3 (URL pre-firmada, pública)
+                # El endpoint gate.whapi.cloud/media devuelve 200 con body vacío
+                audio_url = audio.get("link", "")
+                if not audio_url:
+                    media_id = audio.get("id", "")
+                    audio_url = f"{self.url_base}/media/{media_id}" if media_id else ""
                 mensajes.append(MensajeEntrante(
                     telefono=telefono,
                     texto="",

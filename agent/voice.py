@@ -24,11 +24,13 @@ async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
     import asyncio
 
-    # Descargar desde endpoint de Whapi con token de autenticación
-    headers = {"Authorization": f"Bearer {token_whapi}"}
+    # Usar auth solo si la URL es del endpoint de Whapi (no para S3 pre-firmado)
+    headers = {}
+    if "whapi" in url_audio:
+        headers["Authorization"] = f"Bearer {token_whapi}"
     async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
         r = await client.get(url_audio, headers=headers)
-        logger.info(f"Descarga audio Whapi: status={r.status_code}, size={len(r.content)}, content-type={r.headers.get('content-type', 'unknown')}")
+        logger.info(f"Descarga audio: status={r.status_code}, size={len(r.content)}, content-type={r.headers.get('content-type', 'unknown')}")
         audio_bytes = r.content
 
     if not audio_bytes:
