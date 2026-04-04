@@ -22,24 +22,19 @@ groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
-    # La URL ya es un link directo a S3 (sin auth) — descargar directamente
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        r = await client.get(url_audio)
-        logger.info(f"Descarga audio: status={r.status_code}, size={len(r.content)}, content-type={r.headers.get('content-type', 'unknown')}")
+    # Descargar audio desde S3 usando streaming
+    audio_bytes = b""
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with client.stream("GET", url_audio) as r:
+            logger.info(f"Descarga audio stream: status={r.status_code}, content-type={r.headers.get('content-type', 'unknown')}, content-length={r.headers.get('content-length', 'unknown')}")
+            if r.status_code == 200:
+                async for chunk in r.aiter_bytes():
+                    audio_bytes += chunk
 
-        if r.status_code != 200 or not r.content:
-            # Fallback: intentar con auth header de Whapi
-            r2 = await client.get(url_audio, headers={"Authorization": f"Bearer {token_whapi}"})
-            logger.info(f"Descarga audio (con auth): status={r2.status_code}, size={len(r2.content)}")
-            audio_bytes = r2.content
-        else:
-            audio_bytes = r.content
-
-        if not audio_bytes:
-            logger.error("Audio descargado está vacío")
-            return ""
-
-        logger.info(f"Audio descargado OK: {len(audio_bytes)} bytes")
+    logger.info(f"Audio descargado: {len(audio_bytes)} bytes")
+    if not audio_bytes:
+        logger.error("Audio descargado está vacío")
+        return ""
 
     try:
         transcripcion = await groq_client.audio.transcriptions.create(
