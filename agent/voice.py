@@ -29,9 +29,9 @@ async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     if "whapi" in url_audio:
         headers["Authorization"] = f"Bearer {token_whapi}"
     async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-        r = await client.get(url_audio, headers=headers)
-        logger.info(f"Descarga audio: status={r.status_code}, size={len(r.content)}, content-type={r.headers.get('content-type', 'unknown')}")
-        audio_bytes = r.content
+        async with client.stream("GET", url_audio, headers=headers) as r:
+            audio_bytes = await r.aread()
+        logger.info(f"Descarga audio: status={r.status_code}, size={len(audio_bytes)}, content-type={r.headers.get('content-type', 'unknown')}")
 
     if not audio_bytes:
         logger.error("Audio descargado está vacío")
