@@ -30,12 +30,13 @@ async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
             logger.error(f"Error descargando audio: {r.status_code} — {r.text[:200]}")
             return ""
 
+        logger.info(f"Respuesta Whapi: status={r.status_code}, content-type={r.headers.get('content-type', 'unknown')}, size={len(r.content)}, primeros bytes={r.content[:100]}")
         audio_bytes = r.content
         if not audio_bytes:
             logger.error("Audio descargado está vacío")
             return ""
 
-        logger.info(f"Audio descargado: {len(audio_bytes)} bytes, content-type: {r.headers.get('content-type', 'unknown')}")
+        logger.info(f"Audio descargado: {len(audio_bytes)} bytes")
 
     try:
         transcripcion = await groq_client.audio.transcriptions.create(
