@@ -37,13 +37,15 @@ class ProveedorWhapi(ProveedorWhatsApp):
                 # Ignorar audios propios (los que envía el agente)
                 if es_propio:
                     continue
-                # Mensaje de voz — construir URL de descarga con el ID de media
+                # Mensaje de voz — obtener URL de descarga
                 audio = msg.get("voice") or msg.get("audio") or {}
-                media_id = audio.get("id", "")
-                if media_id:
-                    audio_url = f"{self.url_base}/media/{media_id}"
-                else:
-                    audio_url = audio.get("link", "")
+                logger.info(f"Objeto audio completo: {audio}")
+                # Preferir link directo si existe, si no construir desde media_id
+                audio_url = audio.get("link", "")
+                if not audio_url:
+                    media_id = audio.get("id", "")
+                    if media_id:
+                        audio_url = f"{self.url_base}/media/{media_id}"
                 mensajes.append(MensajeEntrante(
                     telefono=telefono,
                     texto="",
