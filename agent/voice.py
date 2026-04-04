@@ -20,18 +20,27 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
 groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 
+def _descargar_audio_sync(url: str, token_whapi: str) -> bytes:
+    """Descarga el audio de forma síncrona con urllib (más fiable en Railway)."""
+    import urllib.request
+    headers = {}
+    if "whapi" in url:
+        headers["Authorization"] = f"Bearer {token_whapi}"
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return resp.read()
+
+
 async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
     import asyncio
 
-    # Usar auth solo si la URL es del endpoint de Whapi (no para S3 pre-firmado)
-    headers = {}
-    if "whapi" in url_audio:
-        headers["Authorization"] = f"Bearer {token_whapi}"
-    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-        async with client.stream("GET", url_audio, headers=headers) as r:
-            audio_bytes = await r.aread()
-        logger.info(f"Descarga audio: status={r.status_code}, size={len(audio_bytes)}, content-type={r.headers.get('content-type', 'unknown')}")
+    try:
+        audio_bytes = await asyncio.to_thread(_descargar_audio_sync, url_audio, token_whapi)
+        logger.info(f"Descarga audio: size={len(audio_bytes)}")
+    except Exception as e:
+        logger.error(f"Error descargando audio: {e}")
+        return ""
 
     if not audio_bytes:
         logger.error("Audio descargado está vacío")
