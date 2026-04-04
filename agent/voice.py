@@ -24,20 +24,15 @@ async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
     import asyncio
 
-    # Whapi sube el archivo a S3 de forma asíncrona — esperamos a que esté listo
-    audio_bytes = b""
-    for intento in range(3):
-        await asyncio.sleep(2)  # dar tiempo a Whapi para subir el archivo
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-            r = await client.get(url_audio)
-            logger.info(f"Descarga audio intento {intento+1}: status={r.status_code}, size={len(r.content)}, content-length={r.headers.get('content-length', 'unknown')}")
-            if r.status_code == 200 and r.content:
-                audio_bytes = r.content
-                break
+    # Descargar desde endpoint de Whapi con token de autenticación
+    headers = {"Authorization": f"Bearer {token_whapi}"}
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        r = await client.get(url_audio, headers=headers)
+        logger.info(f"Descarga audio Whapi: status={r.status_code}, size={len(r.content)}, content-type={r.headers.get('content-type', 'unknown')}")
+        audio_bytes = r.content
 
-    logger.info(f"Audio descargado: {len(audio_bytes)} bytes")
     if not audio_bytes:
-        logger.error("Audio descargado está vacío tras 3 intentos")
+        logger.error("Audio descargado está vacío")
         return ""
 
     try:
