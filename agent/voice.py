@@ -31,7 +31,7 @@ def _descargar_audio_sync(url: str, token: str = "") -> bytes:
         return resp.read()
 
 
-async def transcribir_audio(url_audio: str, token_whapi: str, mensaje_id: str = "") -> str:
+async def transcribir_audio(url_audio: str, token_whapi: str, _mensaje_id: str = "") -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
     import asyncio
 
@@ -48,26 +48,23 @@ async def transcribir_audio(url_audio: str, token_whapi: str, mensaje_id: str = 
         except Exception as e:
             logger.warning(f"Error descargando S3 intento {intento+1}: {e}")
 
-    # Fallback: pedir URL fresca via la API de mensajes de Whapi
-    if not audio_bytes and token_whapi and mensaje_id:
-        logger.info(f"Fallback: obteniendo URL fresca via GET /messages/{mensaje_id}")
+    # Fallback: descargar directamente desde gate.whapi.cloud con httpx
+    # (urllib da 403 por User-Agent; httpx funciona con el gate de Whapi)
+    if not audio_bytes and token_whapi:
+        media_id = url_audio.split("/")[-1].replace(".oga", "")
+        whapi_url = f"https://gate.whapi.cloud/media/{media_id}"
+        logger.info(f"Fallback Whapi gate: {whapi_url}")
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
                 r = await client.get(
-                    f"https://gate.whapi.cloud/messages/{mensaje_id}",
+                    whapi_url,
                     headers={"Authorization": f"Bearer {token_whapi}"},
                 )
-                logger.info(f"Whapi messages API: status={r.status_code}")
-                if r.status_code == 200:
-                    data = r.json()
-                    voice_data = data.get("voice") or data.get("audio") or {}
-                    fresh_url = voice_data.get("link", "")
-                    logger.info(f"URL fresca obtenida: {bool(fresh_url)}")
-                    if fresh_url and fresh_url != url_audio:
-                        audio_bytes = await asyncio.to_thread(_descargar_audio_sync, fresh_url)
-                        logger.info(f"Descarga URL fresca: size={len(audio_bytes)}")
+                logger.info(f"Whapi gate: status={r.status_code}, size={len(r.content)}")
+                if r.status_code == 200 and r.content:
+                    audio_bytes = r.content
         except Exception as e:
-            logger.error(f"Error en fallback messages API: {e}")
+            logger.error(f"Error en fallback Whapi gate: {e}")
 
     if not audio_bytes:
         logger.error("Audio descargado está vacío tras todos los intentos")
