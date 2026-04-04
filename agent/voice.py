@@ -55,10 +55,17 @@ async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
 
 
 def _limpiar_para_audio(texto: str) -> str:
-    """Elimina emojis y asteriscos de markdown antes de sintetizar voz."""
+    """Elimina emojis, markdown y URLs antes de sintetizar voz."""
     texto = emoji.replace_emoji(texto, replace="")
-    texto = re.sub(r"\*+", "", texto)   # elimina ** y * del markdown
-    texto = re.sub(r"#{1,6} ", "", texto)  # elimina encabezados markdown
+    texto = re.sub(r"https?://\S+", "", texto)       # elimina URLs
+    texto = re.sub(r"@\w+", "", texto)               # elimina menciones @usuario
+    texto = re.sub(r"\*+", "", texto)                # elimina ** y * del markdown
+    texto = re.sub(r"_{1,2}([^_]+)_{1,2}", r"\1", texto)  # elimina _cursiva_
+    texto = re.sub(r"#{1,6}\s*", "", texto)          # elimina encabezados markdown
+    texto = re.sub(r"`+[^`]*`+", "", texto)          # elimina código inline
+    texto = re.sub(r"-{2,}", "", texto)              # elimina guiones largos
+    texto = re.sub(r"\n{2,}", ". ", texto)           # convierte párrafos en pausas
+    texto = re.sub(r"\n", " ", texto)               # elimina saltos de línea
     return re.sub(r" {2,}", " ", texto).strip()
 
 
