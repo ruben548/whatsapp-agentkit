@@ -20,33 +20,51 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
 groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 
-def _descargar_audio_sync(url: str) -> bytes:
+def _descargar_audio_sync(url: str, token: str = "") -> bytes:
     """Descarga el audio de forma síncrona con urllib."""
     import urllib.request
-    req = urllib.request.Request(url)
+    headers = {}
+    if token and "whapi" in url:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=60) as resp:
         return resp.read()
 
 
-async def transcribir_audio(url_audio: str, _token_whapi: str) -> str:
+async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
     import asyncio
 
     # Whapi envía el webhook antes de terminar de subir el archivo a S3.
-    # Esperamos y reintentamos hasta que el archivo esté disponible.
+    # Intentamos varias veces con espera creciente.
     audio_bytes = b""
-    for intento in range(4):
-        await asyncio.sleep(2)
+    for intento in range(6):
+        await asyncio.sleep(3)
         try:
             audio_bytes = await asyncio.to_thread(_descargar_audio_sync, url_audio)
-            logger.info(f"Descarga audio intento {intento+1}: size={len(audio_bytes)}")
+            logger.info(f"Descarga S3 intento {intento+1}: size={len(audio_bytes)}")
             if audio_bytes:
                 break
         except Exception as e:
-            logger.warning(f"Error descargando audio intento {intento+1}: {e}")
+            logger.warning(f"Error descargando S3 intento {intento+1}: {e}")
+
+    # Fallback: intentar via endpoint de Whapi con autenticación
+    if not audio_bytes and token_whapi:
+        media_id = url_audio.split("/")[-1].replace(".oga", "")
+        whapi_url = f"https://gate.whapi.cloud/media/{media_id}"
+        logger.info(f"Fallback Whapi endpoint: {whapi_url}")
+        for intento in range(3):
+            await asyncio.sleep(3)
+            try:
+                audio_bytes = await asyncio.to_thread(_descargar_audio_sync, whapi_url, token_whapi)
+                logger.info(f"Descarga Whapi fallback intento {intento+1}: size={len(audio_bytes)}")
+                if audio_bytes:
+                    break
+            except Exception as e:
+                logger.warning(f"Error fallback Whapi intento {intento+1}: {e}")
 
     if not audio_bytes:
-        logger.error("Audio descargado está vacío")
+        logger.error("Audio descargado está vacío tras todos los intentos")
         return ""
 
     try:
