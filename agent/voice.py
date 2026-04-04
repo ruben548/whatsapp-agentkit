@@ -22,18 +22,22 @@ groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
-    # Descargar audio desde S3 usando streaming
+    import asyncio
+
+    # Whapi sube el archivo a S3 de forma asíncrona — esperamos a que esté listo
     audio_bytes = b""
-    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-        async with client.stream("GET", url_audio) as r:
-            logger.info(f"Descarga audio stream: status={r.status_code}, content-type={r.headers.get('content-type', 'unknown')}, content-length={r.headers.get('content-length', 'unknown')}")
-            if r.status_code == 200:
-                async for chunk in r.aiter_bytes():
-                    audio_bytes += chunk
+    for intento in range(3):
+        await asyncio.sleep(2)  # dar tiempo a Whapi para subir el archivo
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            r = await client.get(url_audio)
+            logger.info(f"Descarga audio intento {intento+1}: status={r.status_code}, size={len(r.content)}, content-length={r.headers.get('content-length', 'unknown')}")
+            if r.status_code == 200 and r.content:
+                audio_bytes = r.content
+                break
 
     logger.info(f"Audio descargado: {len(audio_bytes)} bytes")
     if not audio_bytes:
-        logger.error("Audio descargado está vacío")
+        logger.error("Audio descargado está vacío tras 3 intentos")
         return ""
 
     try:
