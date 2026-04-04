@@ -22,18 +22,30 @@ groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 async def transcribir_audio(url_audio: str, token_whapi: str) -> str:
     """Descarga el audio de Whapi y lo transcribe con Groq Whisper."""
-    # Whapi requiere el token como query param para descargar media
-    url_con_token = f"{url_audio}?token={token_whapi}"
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        r = await client.get(url_con_token)
-        if r.status_code != 200:
-            logger.error(f"Error descargando audio: {r.status_code} — {r.text[:200]}")
-            return ""
+    # Whapi: primero obtener la URL real del media, luego descargarla
+    headers_auth = {"Authorization": f"Bearer {token_whapi}"}
+    async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
+        # Paso 1: GET con auth para obtener redirect a URL real
+        r = await client.get(url_audio, headers=headers_auth)
+        logger.info(f"Whapi paso 1: status={r.status_code}, location={r.headers.get('location', 'none')}, size={len(r.content)}")
 
-        logger.info(f"Respuesta Whapi: status={r.status_code}, content-type={r.headers.get('content-type', 'unknown')}, size={len(r.content)}, primeros bytes={r.content[:100]}")
-        audio_bytes = r.content
+        if r.status_code in (301, 302, 303, 307, 308):
+            # Hay redirección — seguirla sin el header de auth
+            redirect_url = r.headers.get("location", "")
+            r2 = await client.get(redirect_url)
+            logger.info(f"Whapi paso 2 (redirect): status={r2.status_code}, size={len(r2.content)}")
+            audio_bytes = r2.content
+        elif r.status_code == 200 and len(r.content) > 0:
+            audio_bytes = r.content
+        else:
+            # Intentar con token como query param
+            url_con_token = f"{url_audio}?token={token_whapi}"
+            r3 = await client.get(url_con_token, follow_redirects=True)
+            logger.info(f"Whapi paso 2 (query token): status={r3.status_code}, size={len(r3.content)}")
+            audio_bytes = r3.content
+
         if not audio_bytes:
-            logger.error("Audio descargado está vacío")
+            logger.error("Audio descargado está vacío después de todos los intentos")
             return ""
 
         logger.info(f"Audio descargado: {len(audio_bytes)} bytes")
