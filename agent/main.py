@@ -67,7 +67,7 @@ async def webhook_handler(request: Request):
             if es_audio:
                 # Mensaje de voz — transcribir primero
                 whapi_token = os.getenv("WHAPI_TOKEN", "")
-                texto_usuario = await transcribir_audio(msg.audio_url, whapi_token)
+                texto_usuario = await transcribir_audio(msg.audio_url, whapi_token, msg.mensaje_id)
                 if not texto_usuario:
                     logger.warning(f"No se pudo transcribir audio de {msg.telefono}")
                     continue
